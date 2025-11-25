@@ -76,14 +76,13 @@ app.post('/auth/login', (req, res) => {
 //  REGISTRO (frontend -> backend -> Supabase)
 // ======================
 
-// Versión oficial /api/v1/auth/register
-app.post('/api/v1/auth/register', async (req, res) => {
-  const { name, email, password } = req.body
+async function registerHandler(req, res) {
+  const { name, email, password } = req.body;
 
   if (!name || !email || !password) {
     return res
       .status(400)
-      .json({ error: 'Nombre, email y password son obligatorios' })
+      .json({ error: 'Nombre, email y password son obligatorios' });
   }
 
   try {
@@ -91,14 +90,14 @@ app.post('/api/v1/auth/register', async (req, res) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-    })
+    });
 
     if (error || !data?.user) {
-      console.error('Error en signUp Supabase:', error)
-      return res.status(400).json({ error: 'No se pudo crear el usuario' })
+      console.error('Error en signUp Supabase:', error);
+      return res.status(400).json({ error: 'No se pudo crear el usuario' });
     }
 
-    const user = data.user
+    const user = data.user;
 
     // 2) Crear el perfil con rol "customer"
     const profilePayload = {
@@ -106,57 +105,58 @@ app.post('/api/v1/auth/register', async (req, res) => {
       email,
       role: 'customer',
       name, // columna name en tabla profiles
-    }
+    };
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .insert(profilePayload)
       .select()
-      .single()
+      .single();
 
     if (profileError) {
-      console.error('Error creando perfil en register:', profileError)
+      console.error('Error creando perfil en register:', profileError);
       return res
         .status(500)
-        .json({ error: 'Usuario creado, pero fallo al guardar perfil' })
+        .json({ error: 'Usuario creado, pero fallo al guardar perfil' });
     }
 
     // 3) Obtener token de sesión (por si signUp no lo devuelve)
-    let token = data.session?.access_token
+    let token = data.session?.access_token;
 
     if (!token) {
       const { data: loginData, error: loginError } =
         await supabase.auth.signInWithPassword({
           email,
           password,
-        })
+        });
 
       if (loginError || !loginData?.session) {
-        console.error('Error obteniendo sesión tras registro:', loginError)
+        console.error('Error obteniendo sesión tras registro:', loginError);
         return res
           .status(500)
-          .json({ error: 'Usuario creado, pero sin sesión' })
+          .json({ error: 'Usuario creado, pero sin sesión' });
       }
 
-      token = loginData.session.access_token
+      token = loginData.session.access_token;
     }
 
     // 4) Devolver token + perfil
     return res.status(201).json({
       token,
       user: profile, // { id, email, role, name }
-    })
+    });
   } catch (err) {
-    console.error('Error inesperado en /auth/register:', err)
-    return res.status(500).json({ error: 'Error interno en registro' })
+    console.error('Error inesperado en registerHandler:', err);
+    return res.status(500).json({ error: 'Error interno en registro' });
   }
-})
+}
 
-// Alias sin /api/v1 por si el front pega a /auth/register
-app.post('/auth/register', (req, res) => {
-  req.url = '/api/v1/auth/register'
-  app._router.handle(req, res)
-})
+// Registramos el mismo handler en VARIOS paths para que no falle por la URL
+app.post('/api/v1/auth/register', registerHandler);
+app.post('/auth/register', registerHandler);
+app.post('/api/v1/register', registerHandler);
+app.post('/register', registerHandler);
+
 
 // ======================
 //  RUTA /me (usuario actual)
