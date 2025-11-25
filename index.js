@@ -95,7 +95,7 @@ app.post('/api/v1/auth/register', async (req, res) => {
       id: user.id,
       email,
       role: 'customer',
-      name, // asegúrate de tener esta columna en profiles
+      name, // columna name en tabla profiles
     };
 
     const { data: profile, error: profileError } = await supabase
@@ -109,11 +109,10 @@ app.post('/api/v1/auth/register', async (req, res) => {
       return res.status(500).json({ error: 'Usuario creado, pero fallo al guardar perfil' });
     }
 
-    // 3) Obtener un token de sesión
+    // 3) Obtener un token de sesión (por si signUp no lo devuelve)
     let token = data.session?.access_token;
 
     if (!token) {
-      // Si signUp no devolvió sesión, hacemos login para obtener token
       const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -137,6 +136,8 @@ app.post('/api/v1/auth/register', async (req, res) => {
     return res.status(500).json({ error: 'Error interno en registro' });
   }
 });
+
+
 
 
 // ======================
