@@ -401,6 +401,17 @@ app.get('/api/v1/orders', authMiddleware, async (req, res) => {
     res.status(500).json({ error: 'Error interno' })
   }
 })
+// ======================
+//  CATCH-ALL para POST (debug)
+// ======================
+app.post('*', (req, res) => {
+  console.log('POST no encontrado:', req.method, req.path)
+  return res
+    .status(404)
+    .json({ error: `Ruta POST no encontrada: ${req.path}` })
+})
+
+
 
 // ======================
 //  ARRANQUE DEL SERVIDOR
