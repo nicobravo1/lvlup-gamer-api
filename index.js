@@ -66,6 +66,78 @@ app.post('/api/v1/auth/login', async (req, res) => {
     return res.status(500).json({ error: 'Error interno en login' });
   }
 });
+// ======================
+//  REGISTRO (frontend -> backend -> Supabase)
+// ======================
+app.post('/api/v1/auth/register', async (req, res) => {
+  const { name, email, password } = req.body;
+
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'Nombre, email y password son obligatorios' });
+  }
+
+  try {
+    // 1) Crear el usuario en Supabase Auth
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+
+    if (error || !data?.user) {
+      console.error('Error en signUp Supabase:', error);
+      return res.status(400).json({ error: 'No se pudo crear el usuario' });
+    }
+
+    const user = data.user;
+
+    // 2) Crear el perfil con rol "customer"
+    const profilePayload = {
+      id: user.id,
+      email,
+      role: 'customer',
+      name, // asegúrate de tener esta columna en profiles
+    };
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .insert(profilePayload)
+      .select()
+      .single();
+
+    if (profileError) {
+      console.error('Error creando perfil en register:', profileError);
+      return res.status(500).json({ error: 'Usuario creado, pero fallo al guardar perfil' });
+    }
+
+    // 3) Obtener un token de sesión
+    let token = data.session?.access_token;
+
+    if (!token) {
+      // Si signUp no devolvió sesión, hacemos login para obtener token
+      const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (loginError || !loginData?.session) {
+        console.error('Error obteniendo sesión tras registro:', loginError);
+        return res.status(500).json({ error: 'Usuario creado, pero sin sesión' });
+      }
+
+      token = loginData.session.access_token;
+    }
+
+    // 4) Devolver token + perfil (igual que en login)
+    return res.status(201).json({
+      token,
+      user: profile, // { id, email, role, name }
+    });
+  } catch (err) {
+    console.error('Error inesperado en /auth/register:', err);
+    return res.status(500).json({ error: 'Error interno en registro' });
+  }
+});
+
 
 // ======================
 //  RUTA /me (usuario actual)
