@@ -64,9 +64,10 @@ app.post('/api/v1/auth/login', async (req, res) => {
 
 // ======================
 //  REGISTRO (frontend -> backend -> Supabase)
-//  👉 SIN tocar la tabla profiles
 // ======================
 app.post('/api/v1/auth/register', async (req, res) => {
+  console.log('>>> Entró a POST /api/v1/auth/register')
+
   const { name, email, password } = req.body
 
   if (!name || !email || !password) {
@@ -76,56 +77,56 @@ app.post('/api/v1/auth/register', async (req, res) => {
   }
 
   try {
+    // 1) Crear el usuario en Supabase Auth
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: { name }, // guarda el nombre en user_metadata
-      },
     })
 
     if (error || !data?.user) {
       console.error('Error en signUp Supabase:', error)
-      return res.status(400).json({ error: 'No se pudo crear el usuario' })
+      return res
+        .status(400)
+        .json({ error: error?.message || 'No se pudo crear el usuario' })
     }
 
     const user = data.user
 
-    // Si Supabase no devuelve sesión, la creamos
-    let token = data.session?.access_token
-    if (!token) {
-      const { data: loginData, error: loginError } =
-        await supabase.auth.signInWithPassword({
-          email,
-          password,
-        })
-
-      if (loginError || !loginData?.session) {
-        console.error('Error obteniendo sesión tras registro:', loginError)
-        return res
-          .status(500)
-          .json({ error: 'Usuario creado, pero sin sesión' })
-      }
-
-      token = loginData.session.access_token
+    // 2) Crear el perfil con rol "customer"
+    const profilePayload = {
+      id: user.id,
+      email,
+      role: 'customer',
+      name,
     }
 
-    const role = 'customer' // todos los registrados son clientes
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .insert(profilePayload)
+      .select()
+      .single()
+
+    if (profileError) {
+      console.error('Error creando perfil en register:', profileError)
+      return res
+        .status(500)
+        .json({ error: 'Usuario creado, pero fallo al guardar perfil' })
+    }
+
+    // 3) Ahora, como ya desactivaste la confirmación de email,
+    //    Supabase debería devolver session directamente
+    const token = data.session?.access_token || null
 
     return res.status(201).json({
       token,
-      user: {
-        id: user.id,
-        email: user.email,
-        role,
-        name,
-      },
+      user: profile, // { id, email, role, name }
     })
   } catch (err) {
     console.error('Error inesperado en /auth/register:', err)
     return res.status(500).json({ error: 'Error interno en registro' })
   }
 })
+
 
 // ======================
 //  RUTA /me (usuario actual)
