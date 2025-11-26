@@ -1,4 +1,3 @@
-// index.js
 require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
@@ -8,13 +7,6 @@ const { authMiddleware, requireRole } = require('./authMiddleware')
 const app = express()
 const PORT = process.env.PORT || 3001
 
-// --------- LOGGER GLOBAL (para ver las requests en Render) ----------
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`)
-  next()
-})
-
-// Middlewares base
 app.use(cors())
 app.use(express.json())
 
@@ -26,7 +18,7 @@ app.get('/api/v1/health', (req, res) => {
 })
 
 // ======================
-//  LOGIN
+//  LOGIN (frontend -> backend -> Supabase)
 // ======================
 app.post('/api/v1/auth/login', async (req, res) => {
   const { email, password } = req.body
@@ -49,20 +41,20 @@ app.post('/api/v1/auth/login', async (req, res) => {
     const token = data.session.access_token
     const user = data.user
 
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('id, email, role, name')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError || !profile) {
-      console.error('Error buscando perfil en login:', profileError)
-      return res.status(403).json({ error: 'Perfil no encontrado' })
+    // mismo criterio de rol que en authMiddleware
+    let role = 'customer'
+    if (user.email === 'admin@lvlup.com') {
+      role = 'admin'
     }
 
     return res.json({
       token,
-      user: profile, // { id, email, role, name }
+      user: {
+        id: user.id,
+        email: user.email,
+        role,
+        name: user.user_metadata?.name || null,
+      },
     })
   } catch (err) {
     console.error('Error inesperado en /auth/login:', err)
@@ -72,9 +64,9 @@ app.post('/api/v1/auth/login', async (req, res) => {
 
 // ======================
 //  REGISTRO (frontend -> backend -> Supabase)
+//  👉 SIN tocar la tabla profiles
 // ======================
 app.post('/api/v1/auth/register', async (req, res) => {
-  console.log('>>> Entró a POST /api/v1/auth/register')
   const { name, email, password } = req.body
 
   if (!name || !email || !password) {
@@ -84,10 +76,12 @@ app.post('/api/v1/auth/register', async (req, res) => {
   }
 
   try {
-    // 1) Crear el usuario en Supabase Auth
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: { name }, // guarda el nombre en user_metadata
+      },
     })
 
     if (error || !data?.user) {
@@ -97,30 +91,8 @@ app.post('/api/v1/auth/register', async (req, res) => {
 
     const user = data.user
 
-    // 2) Crear el perfil SIN enviar la columna role
-    //    (dejamos que la BD use el valor por defecto permitido por el CHECK)
-    const profilePayload = {
-      id: user.id,
-      email,
-      name,
-    }
-
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .insert(profilePayload)
-      .select()
-      .single()
-
-    if (profileError) {
-      console.error('Error creando perfil en register:', profileError)
-      return res.status(500).json({
-        error: 'Usuario creado, pero fallo al guardar perfil',
-      })
-    }
-
-    // 3) Obtener token de sesión (por si signUp no lo devuelve)
+    // Si Supabase no devuelve sesión, la creamos
     let token = data.session?.access_token
-
     if (!token) {
       const { data: loginData, error: loginError } =
         await supabase.auth.signInWithPassword({
@@ -138,10 +110,16 @@ app.post('/api/v1/auth/register', async (req, res) => {
       token = loginData.session.access_token
     }
 
-    // 4) Devolver token + perfil
+    const role = 'customer' // todos los registrados son clientes
+
     return res.status(201).json({
       token,
-      user: profile, // { id, email, name, role?(según default de la BD) }
+      user: {
+        id: user.id,
+        email: user.email,
+        role,
+        name,
+      },
     })
   } catch (err) {
     console.error('Error inesperado en /auth/register:', err)
@@ -149,25 +127,15 @@ app.post('/api/v1/auth/register', async (req, res) => {
   }
 })
 
-
 // ======================
 //  RUTA /me (usuario actual)
 // ======================
 app.get('/api/v1/me', authMiddleware, (req, res) => {
-  res.json({
-    id: req.user.id,
-    email: req.user.email,
-    role: req.user.role,
-    name: req.user.name,
-  })
+  res.json(req.user) // { id, email, role }
 })
 
-// ======================
-//  PRODUCTOS (igual que antes)
-// ======================
 
-// ... (deja aquí todo el código de /api/v1/products, /api/v1/orders, etc
-// tal como ya lo tenías, SIN cambiar las rutas)
+
 
 
 
