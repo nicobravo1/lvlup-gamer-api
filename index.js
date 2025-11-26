@@ -8,9 +8,17 @@ const { authMiddleware, requireRole } = require('./authMiddleware')
 const app = express()
 const PORT = process.env.PORT || 3001
 
-// Middlewares base
+// ======================
+//  MIDDLEWARES BASE
+// ======================
 app.use(cors())
 app.use(express.json())
+
+// 🔍 Logger de todas las requests (para debug en Render)
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`)
+  next()
+})
 
 // ======================
 //  HEALTHCHECK
@@ -67,8 +75,9 @@ app.post('/api/v1/auth/login', async (req, res) => {
 // ======================
 //  REGISTRO (frontend -> backend -> Supabase)
 // ======================
-app.post('/api/v1/auth/register', async (req, res) => {
-  console.log('POST /api/v1/auth/register recibido') // <-- debug en Render
+
+async function registerHandler(req, res) {
+  console.log('>> Entró a registerHandler')
 
   const { name, email, password } = req.body
 
@@ -139,10 +148,16 @@ app.post('/api/v1/auth/register', async (req, res) => {
       user: profile, // { id, email, role, name }
     })
   } catch (err) {
-    console.error('Error inesperado en /auth/register:', err)
+    console.error('Error inesperado en registerHandler:', err)
     return res.status(500).json({ error: 'Error interno en registro' })
   }
-})
+}
+
+// Misma lógica en varios paths por si el front llama distinto
+app.post(
+  ['/api/v1/auth/register', '/auth/register', '/api/v1/register', '/register'],
+  registerHandler
+)
 
 // ======================
 //  RUTA /me (usuario actual)
@@ -394,5 +409,6 @@ app.get('/api/v1/orders', authMiddleware, async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Servidor escuchando en http://localhost:${PORT}`)
 })
+
 
 
