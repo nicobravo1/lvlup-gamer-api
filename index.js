@@ -22,8 +22,6 @@ app.get('/api/v1/health', (req, res) => {
 // ======================
 //  LOGIN (frontend -> backend -> Supabase)
 // ======================
-
-// Versión con /api/v1 (oficial)
 app.post('/api/v1/auth/login', async (req, res) => {
   const { email, password } = req.body
 
@@ -66,23 +64,18 @@ app.post('/api/v1/auth/login', async (req, res) => {
   }
 })
 
-// Alias sin /api/v1 por si el front lo llama así
-app.post('/auth/login', (req, res) => {
-  req.url = '/api/v1/auth/login'
-  app._router.handle(req, res)
-})
-
 // ======================
 //  REGISTRO (frontend -> backend -> Supabase)
 // ======================
+app.post('/api/v1/auth/register', async (req, res) => {
+  console.log('POST /api/v1/auth/register recibido') // <-- debug en Render
 
-async function registerHandler(req, res) {
-  const { name, email, password } = req.body;
+  const { name, email, password } = req.body
 
   if (!name || !email || !password) {
     return res
       .status(400)
-      .json({ error: 'Nombre, email y password son obligatorios' });
+      .json({ error: 'Nombre, email y password son obligatorios' })
   }
 
   try {
@@ -90,73 +83,66 @@ async function registerHandler(req, res) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-    });
+    })
 
     if (error || !data?.user) {
-      console.error('Error en signUp Supabase:', error);
-      return res.status(400).json({ error: 'No se pudo crear el usuario' });
+      console.error('Error en signUp Supabase:', error)
+      return res.status(400).json({ error: 'No se pudo crear el usuario' })
     }
 
-    const user = data.user;
+    const user = data.user
 
     // 2) Crear el perfil con rol "customer"
     const profilePayload = {
       id: user.id,
       email,
       role: 'customer',
-      name, // columna name en tabla profiles
-    };
+      name,
+    }
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .insert(profilePayload)
       .select()
-      .single();
+      .single()
 
     if (profileError) {
-      console.error('Error creando perfil en register:', profileError);
+      console.error('Error creando perfil en register:', profileError)
       return res
         .status(500)
-        .json({ error: 'Usuario creado, pero fallo al guardar perfil' });
+        .json({ error: 'Usuario creado, pero fallo al guardar perfil' })
     }
 
     // 3) Obtener token de sesión (por si signUp no lo devuelve)
-    let token = data.session?.access_token;
+    let token = data.session?.access_token
 
     if (!token) {
       const { data: loginData, error: loginError } =
         await supabase.auth.signInWithPassword({
           email,
           password,
-        });
+        })
 
       if (loginError || !loginData?.session) {
-        console.error('Error obteniendo sesión tras registro:', loginError);
+        console.error('Error obteniendo sesión tras registro:', loginError)
         return res
           .status(500)
-          .json({ error: 'Usuario creado, pero sin sesión' });
+          .json({ error: 'Usuario creado, pero sin sesión' })
       }
 
-      token = loginData.session.access_token;
+      token = loginData.session.access_token
     }
 
     // 4) Devolver token + perfil
     return res.status(201).json({
       token,
       user: profile, // { id, email, role, name }
-    });
+    })
   } catch (err) {
-    console.error('Error inesperado en registerHandler:', err);
-    return res.status(500).json({ error: 'Error interno en registro' });
+    console.error('Error inesperado en /auth/register:', err)
+    return res.status(500).json({ error: 'Error interno en registro' })
   }
-}
-
-// Registramos el mismo handler en VARIOS paths para que no falle por la URL
-app.post('/api/v1/auth/register', registerHandler);
-app.post('/auth/register', registerHandler);
-app.post('/api/v1/register', registerHandler);
-app.post('/register', registerHandler);
-
+})
 
 // ======================
 //  RUTA /me (usuario actual)
@@ -401,17 +387,6 @@ app.get('/api/v1/orders', authMiddleware, async (req, res) => {
     res.status(500).json({ error: 'Error interno' })
   }
 })
-// ======================
-//  CATCH-ALL para POST (debug)
-// ======================
-app.post('*', (req, res) => {
-  console.log('POST no encontrado:', req.method, req.path)
-  return res
-    .status(404)
-    .json({ error: `Ruta POST no encontrada: ${req.path}` })
-})
-
-
 
 // ======================
 //  ARRANQUE DEL SERVIDOR
@@ -419,4 +394,5 @@ app.post('*', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Servidor escuchando en http://localhost:${PORT}`)
 })
+
 
