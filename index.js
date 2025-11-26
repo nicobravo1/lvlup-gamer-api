@@ -8,17 +8,15 @@ const { authMiddleware, requireRole } = require('./authMiddleware')
 const app = express()
 const PORT = process.env.PORT || 3001
 
-// ======================
-//  MIDDLEWARES BASE
-// ======================
-app.use(cors())
-app.use(express.json())
-
-// 🔍 Logger de todas las requests (para debug en Render)
+// --------- LOGGER GLOBAL (para ver las requests en Render) ----------
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`)
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`)
   next()
 })
+
+// Middlewares base
+app.use(cors())
+app.use(express.json())
 
 // ======================
 //  HEALTHCHECK
@@ -28,7 +26,7 @@ app.get('/api/v1/health', (req, res) => {
 })
 
 // ======================
-//  LOGIN (frontend -> backend -> Supabase)
+//  LOGIN
 // ======================
 app.post('/api/v1/auth/login', async (req, res) => {
   const { email, password } = req.body
@@ -73,12 +71,10 @@ app.post('/api/v1/auth/login', async (req, res) => {
 })
 
 // ======================
-//  REGISTRO (frontend -> backend -> Supabase)
+//  REGISTRO
 // ======================
-
-async function registerHandler(req, res) {
-  console.log('>> Entró a registerHandler')
-
+app.post('/api/v1/auth/register', async (req, res) => {
+  console.log('>>> Entró a POST /api/v1/auth/register')
   const { name, email, password } = req.body
 
   if (!name || !email || !password) {
@@ -148,16 +144,10 @@ async function registerHandler(req, res) {
       user: profile, // { id, email, role, name }
     })
   } catch (err) {
-    console.error('Error inesperado en registerHandler:', err)
+    console.error('Error inesperado en /auth/register:', err)
     return res.status(500).json({ error: 'Error interno en registro' })
   }
-}
-
-// Misma lógica en varios paths por si el front llama distinto
-app.post(
-  ['/api/v1/auth/register', '/auth/register', '/api/v1/register', '/register'],
-  registerHandler
-)
+})
 
 // ======================
 //  RUTA /me (usuario actual)
@@ -170,6 +160,16 @@ app.get('/api/v1/me', authMiddleware, (req, res) => {
     name: req.user.name,
   })
 })
+
+// ======================
+//  PRODUCTOS (igual que antes)
+// ======================
+
+// ... (deja aquí todo el código de /api/v1/products, /api/v1/orders, etc
+// tal como ya lo tenías, SIN cambiar las rutas)
+
+
+
 
 // ======================
 //  PRODUCTOS
@@ -402,13 +402,11 @@ app.get('/api/v1/orders', authMiddleware, async (req, res) => {
     res.status(500).json({ error: 'Error interno' })
   }
 })
-
 // ======================
 //  ARRANQUE DEL SERVIDOR
 // ======================
 app.listen(PORT, () => {
   console.log(`Servidor escuchando en http://localhost:${PORT}`)
 })
-
 
 
