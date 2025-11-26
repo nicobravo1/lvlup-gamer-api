@@ -71,7 +71,7 @@ app.post('/api/v1/auth/login', async (req, res) => {
 })
 
 // ======================
-//  REGISTRO
+//  REGISTRO (frontend -> backend -> Supabase)
 // ======================
 app.post('/api/v1/auth/register', async (req, res) => {
   console.log('>>> Entró a POST /api/v1/auth/register')
@@ -97,11 +97,11 @@ app.post('/api/v1/auth/register', async (req, res) => {
 
     const user = data.user
 
-    // 2) Crear el perfil con rol "customer"
+    // 2) Crear el perfil SIN enviar la columna role
+    //    (dejamos que la BD use el valor por defecto permitido por el CHECK)
     const profilePayload = {
       id: user.id,
       email,
-      role: 'customer',
       name,
     }
 
@@ -113,9 +113,9 @@ app.post('/api/v1/auth/register', async (req, res) => {
 
     if (profileError) {
       console.error('Error creando perfil en register:', profileError)
-      return res
-        .status(500)
-        .json({ error: 'Usuario creado, pero fallo al guardar perfil' })
+      return res.status(500).json({
+        error: 'Usuario creado, pero fallo al guardar perfil',
+      })
     }
 
     // 3) Obtener token de sesión (por si signUp no lo devuelve)
@@ -141,13 +141,14 @@ app.post('/api/v1/auth/register', async (req, res) => {
     // 4) Devolver token + perfil
     return res.status(201).json({
       token,
-      user: profile, // { id, email, role, name }
+      user: profile, // { id, email, name, role?(según default de la BD) }
     })
   } catch (err) {
     console.error('Error inesperado en /auth/register:', err)
     return res.status(500).json({ error: 'Error interno en registro' })
   }
 })
+
 
 // ======================
 //  RUTA /me (usuario actual)
